@@ -1,0 +1,19 @@
+names:
+- fist
+- index_left
+- index_right
+- open_palm
+- point
+- thumbs_down
+- thumbs_up
+nc: 7
+path: C:\Users\4263775\OneDrive - Jabil\Desktop\priya_dob\dataset
+roboflow:
+  license: CC BY 4.0
+  project: hand-gesture-recognition-dpks9
+  url: https://universe.roboflow.com/khanh18/hand-gesture-recognition-dpks9/dataset/3
+  version: 3
+  workspace: khanh18
+test: test/images
+train: train/images
+val: valid/images
