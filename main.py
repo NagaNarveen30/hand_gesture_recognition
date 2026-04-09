@@ -5,7 +5,9 @@ from ultralytics import YOLO
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "runs", "detect", "gesture_model", "weights", "best.pt")
+#print(f"Base directory: {BASE_DIR}")
+MODEL_PATH = os.path.join(BASE_DIR, "best.pt")  # Update if your model is in a different location
+# print(f"Model path: {MODEL_PATH}")
 
 # ── Load model ─────────────────────────────────────────────────────────────
 model = YOLO(MODEL_PATH)
@@ -13,6 +15,7 @@ model = YOLO(MODEL_PATH)
 # ── MediaPipe ──────────────────────────────────────────────────────────────
 mp_hands    = mp.solutions.hands
 mp_drawing  = mp.solutions.drawing_utils
+
 
 # ── Gesture → robot command mapping ───────────────────────────────────────
 COMMANDS = {
@@ -76,7 +79,7 @@ def main():
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf  = float(box.conf[0])
                 label = model.names[int(box.cls[0])]
-                cmd   = COMMANDS.get(label, "UNKNOWN")
+                cmd = COMMANDS.get(label, "UNKNOWN")
                 draw_prediction(frame, label, conf, cmd, x1, y1, x2, y2)
 
             cv2.imshow("Hand Gesture Recognition", frame)
