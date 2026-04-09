@@ -1,19 +1,14 @@
-names:
-- fist
-- index_left
-- index_right
-- open_palm
-- point
-- thumbs_down
-- thumbs_up
-nc: 7
-path: C:\Users\4263775\OneDrive - Jabil\Desktop\priya_dob\dataset
-roboflow:
-  license: CC BY 4.0
-  project: hand-gesture-recognition-dpks9
-  url: https://universe.roboflow.com/khanh18/hand-gesture-recognition-dpks9/dataset/3
-  version: 3
-  workspace: khanh18
 test: test/images
 train: train/images
 val: valid/images
+
+
+nc: 8
+names: ['Call Me', 'Dislike', 'Good Job', 'Good Luck', 'Middle Finger', 'Ok', 'Peace', 'Rock On']
+path: C:\Users\4263775\OneDrive - Jabil\Desktop\priya_dob\dataset
+roboflow:
+  workspace: puspendu-ai-vision-workspace
+  project: hand_gesture_detection-xdcpy
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/puspendu-ai-vision-workspace/hand_gesture_detection-xdcpy/dataset/1
