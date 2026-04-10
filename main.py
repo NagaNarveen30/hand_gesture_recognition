@@ -1,93 +1,109 @@
 import os
 import cv2
+import numpy as np
 import mediapipe as mp
-from ultralytics import YOLO
+from keras.models import load_model
 
-# ── Paths ──────────────────────────────────────────────────────────────────
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-#print(f"Base directory: {BASE_DIR}")
-MODEL_PATH = os.path.join(BASE_DIR, "best.pt")  # Update if your model is in a different location
-# print(f"Model path: {MODEL_PATH}")
+# ── Paths & Setup ──────────────────────────────────────────────────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "model/keras_Model.h5")
+LABELS_PATH = os.path.join(BASE_DIR, "model/labels.txt")
 
-# ── Load model ─────────────────────────────────────────────────────────────
-model = YOLO(MODEL_PATH)
+# Load Teachable Machine Model
+np.set_printoptions(suppress=True)
+model = load_model(MODEL_PATH, compile=False)
+class_names = [line.strip() for line in open(LABELS_PATH, "r").readlines()]
 
-# ── MediaPipe ──────────────────────────────────────────────────────────────
-mp_hands    = mp.solutions.hands
-mp_drawing  = mp.solutions.drawing_utils
-
-
-# ── Gesture → robot command mapping ───────────────────────────────────────
-COMMANDS = {
-    "fist":        "STOP",
-    "index_left":  "TURN LEFT",
-    "index_right": "TURN RIGHT",
-    "open_palm":   "FORWARD",
-    "point":       "REVERSE",
-    "thumbs_up":   "SPEED UP",
-    "thumbs_down": "SLOW DOWN",
-}
-
-# ── Colours (BGR) ──────────────────────────────────────────────────────────
-BOX_COLOR  = (0, 255, 0)
-TEXT_COLOR = (0, 255, 0)
-CMD_COLOR  = (0, 200, 255)
-
-def draw_fps(frame, fps):
-    cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
-
-def draw_prediction(frame, label, conf, cmd, x1, y1, x2, y2):
-    cv2.rectangle(frame, (x1, y1), (x2, y2), BOX_COLOR, 2)
-    cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, TEXT_COLOR, 2)
-    cv2.putText(frame, cmd, (x1, y2 + 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, CMD_COLOR, 2)
+# MediaPipe Setup
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
 
 def main():
     cap = cv2.VideoCapture(0)
-    prev_tick = cv2.getTickCount()
+    
+    # Attempt to set HD resolution
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-    with mp_hands.Hands(
-        static_image_mode=False,
-        max_num_hands=2,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
-    ) as hands:
+    try:
+        with mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=1,
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.7
+        ) as hands:
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret: break
+                
+                # OPTIONAL: Flip if your model was trained with 'Mirror' on
+                # frame = cv2.flip(frame, 1) 
 
-            # ── FPS ────────────────────────────────────────────────────────
-            curr_tick = cv2.getTickCount()
-            fps = cv2.getTickFrequency() / (curr_tick - prev_tick)
-            prev_tick = curr_tick
-            draw_fps(frame, fps)
+                h, w, c = frame.shape
+                # 1. Convert to RGB for MediaPipe and Model
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = hands.process(rgb_frame)
 
-            # ── MediaPipe landmarks ────────────────────────────────────────
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb)
-            if results.multi_hand_landmarks:
-                for lm in results.multi_hand_landmarks:
-                    mp_drawing.draw_landmarks(frame, lm, mp_hands.HAND_CONNECTIONS)
+                # Default 'AI View' if no hand is detected
+                ai_view = cv2.resize(frame, (224, 224)) 
+                label = "No Hand Detected"
+                conf_text = ""
 
-            # ── YOLO detection + classification ───────────────────────────
-            detections = model(frame, verbose=False)[0]
-            for box in detections.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf  = float(box.conf[0])
-                label = model.names[int(box.cls[0])]
-                cmd = COMMANDS.get(label, "UNKNOWN")
-                draw_prediction(frame, label, conf, cmd, x1, y1, x2, y2)
+                if results.multi_hand_landmarks:
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        # Calculate Bounding Box
+                        x_coords = [lm.x for lm in hand_landmarks.landmark]
+                        y_coords = [lm.y for lm in hand_landmarks.landmark]
+                        
+                        x_min, x_max = int(min(x_coords) * w), int(max(x_coords) * w)
+                        y_min, y_max = int(min(y_coords) * h), int(max(y_coords) * h)
 
-            cv2.imshow("Hand Gesture Recognition", frame)
-            if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
-                break
+                        # Padding (Crucial for TM models)
+                        offset = 60 
+                        x_min, y_min = max(0, x_min - offset), max(0, y_min - offset)
+                        x_max, y_max = min(w, x_max + offset), min(h, y_max + offset)
+                        
+                        # 2. Extract the AI Feed (Crop from the RGB frame!)
+                        hand_crop_rgb = rgb_frame[y_min:y_max, x_min:x_max]
+                        
+                        if hand_crop_rgb.size != 0:
+                            # Prepare for TM (224x224, Normalized)
+                            ai_view = cv2.resize(hand_crop_rgb, (224, 224), interpolation=cv2.INTER_AREA)
+                            img_input = np.asarray(ai_view, dtype=np.float32).reshape(1, 224, 224, 3)
+                            img_input = (img_input / 127.5) - 1 
 
-    cap.release()
-    cv2.destroyAllWindows()
+                            # 3. Predict
+                            prediction = model.predict(img_input, verbose=0)
+                            index = np.argmax(prediction)
+                            label = class_names[index][2:]
+                            conf = prediction[0][index]
+                            conf_text = f"{int(conf*100)}%"
+
+                            # Draw on Main Window
+                            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                            cv2.putText(frame, f"{label} {conf_text}", (x_min, y_min - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                            mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+                # ── Display Dual Windows ─────────────────────────────────────
+                # Convert ai_view back to BGR for display only
+                ai_view_display = cv2.cvtColor(ai_view, cv2.COLOR_RGB2BGR)
+                
+                # Show Main Feed
+                cv2.imshow("Main View (MediaPipe)", frame)
+                
+                # Show AI Feed (What the model is actually judging)
+                cv2.imshow("AI Feed (224x224)", ai_view_display)
+
+                if cv2.waitKey(1) & 0xFF == 27: break # ESC to quit
+
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        print("Closing application...")
+        cap.release()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
