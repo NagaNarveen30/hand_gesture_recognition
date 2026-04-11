@@ -19,7 +19,7 @@ mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
 def main():
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0) # Use 0 for default webcam, change to 1 for external camera (webcam)
     
     # Attempt to set HD resolution
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -28,7 +28,7 @@ def main():
     try:
         with mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
+            max_num_hands=2,
             min_detection_confidence=0.7,
             min_tracking_confidence=0.7
         ) as hands:
